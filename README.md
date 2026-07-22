@@ -1,13 +1,23 @@
 # neurolinks-proxy
 
-Proxy HTTP seguro para reemplazar los endpoints externos de Dusk Codes usados por el backoffice.
+Proxy HTTP privado para centralizar las conexiones del backoffice hacia APIs externas.
+
+Sirve para que los servicios de Neurolinks usen endpoints propios, con autenticacion por token, control de concurrencia, rate limit y validacion de destinos permitidos.
+
+## Para que sirve
+
+- Reenviar solicitudes hacia Google APIs usando un dominio propio.
+- Reenviar solicitudes hacia OpenAI usando un dominio propio.
+- Evitar que el backoffice dependa de endpoints externos no controlados por Neurolinks.
+- Proteger el acceso mediante `PROXY_AUTH_TOKEN`.
+- Limitar abuso con controles de concurrencia y rate limit.
 
 ## Dominios esperados
 
 - Google APIs: `https://google-proxy.clientesneurolinks.com`
 - OpenAI: `https://proxy.clientesneurolinks.com/v1`
 
-Ambos dominios deben apuntar a este mismo servicio.
+Ambos dominios pueden apuntar al mismo servicio del proxy.
 
 ## Variables obligatorias en produccion
 
@@ -15,17 +25,22 @@ Ambos dominios deben apuntar a este mismo servicio.
 NODE_ENV=production
 PORT=3000
 PROXY_AUTH_TOKEN=una_clave_larga_random_de_minimo_32_caracteres
-TRUST_PROXY=true
+```
+
+## Variables recomendadas
+
+```env
+MAX_CONCURRENT_REQUESTS=20000
+RATE_LIMIT_MAX=120000
+REQUEST_TIMEOUT_MS=180000
 ```
 
 ## Variables opcionales
 
 ```env
 MAX_BODY_SIZE=30mb
-REQUEST_TIMEOUT_MS=180000
-MAX_CONCURRENT_REQUESTS=1000
 RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX=1200
+TRUST_PROXY=loopback
 LOG_LEVEL=info
 KEEP_ALIVE_TIMEOUT_MS=65000
 HEADERS_TIMEOUT_MS=66000
@@ -34,7 +49,7 @@ SERVER_REQUEST_TIMEOUT_MS=190000
 
 ## Variables en neurolinks-backoffice
 
-El backoffice debe tener el mismo token:
+El backoffice debe usar el mismo token configurado en este proxy:
 
 ```env
 PROXY_AUTH_TOKEN=la_misma_clave_larga
@@ -42,7 +57,7 @@ GOOGLE_PROXY_URL=https://google-proxy.clientesneurolinks.com
 OPENAI_BASE_URL=https://proxy.clientesneurolinks.com/v1
 ```
 
-## Pruebas
+## Pruebas locales
 
 ```bash
 npm run check
@@ -65,6 +80,7 @@ Respuesta esperada:
 ## Seguridad
 
 - En `NODE_ENV=production`, `PROXY_AUTH_TOKEN` es obligatorio.
-- El proxy solo acepta hosts Google permitidos y `api.openai.com`.
-- El token se envia con `x-proxy-token`.
+- El token debe tener al menos 32 caracteres.
+- El token se envia con el header `x-proxy-token`.
+- El proxy solo permite destinos externos predefinidos.
 - No funciona como proxy abierto hacia cualquier dominio.
