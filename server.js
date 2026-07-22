@@ -198,7 +198,7 @@ function resolveTarget(req) {
     return { provider: "google", targetHost };
   }
 
-  if (hostname.startsWith("proxy.")) {
+  if (hostname.startsWith("proxy.") || hostname.startsWith("openai-proxy.")) {
     if (!openAiAllowedPathPrefixes.some((prefix) => req.originalUrl.startsWith(prefix))) {
       return { errorStatus: 403, error: "OpenAI path not allowed" };
     }

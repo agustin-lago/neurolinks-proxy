@@ -15,7 +15,7 @@ Sirve para que los servicios de Neurolinks usen endpoints propios, con autentica
 ## Dominios esperados
 
 - Google APIs: `https://google-proxy.clientesneurolinks.com`
-- OpenAI: `https://proxy.clientesneurolinks.com/v1`
+- OpenAI: `https://openai-proxy.clientesneurolinks.com/v1`
 
 Ambos dominios pueden apuntar al mismo servicio del proxy.
 
@@ -54,7 +54,7 @@ El backoffice debe usar el mismo token configurado en este proxy:
 ```env
 PROXY_AUTH_TOKEN=la_misma_clave_larga
 GOOGLE_PROXY_URL=https://google-proxy.clientesneurolinks.com
-OPENAI_BASE_URL=https://proxy.clientesneurolinks.com/v1
+OPENAI_BASE_URL=https://openai-proxy.clientesneurolinks.com/v1
 ```
 
 ## Pruebas locales
@@ -68,7 +68,7 @@ Healthcheck publico:
 
 ```txt
 https://google-proxy.clientesneurolinks.com/health
-https://proxy.clientesneurolinks.com/health
+https://openai-proxy.clientesneurolinks.com/health
 ```
 
 Respuesta esperada:
