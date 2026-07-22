@@ -11,7 +11,7 @@ const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 180000);
 const MAX_CONCURRENT_REQUESTS = Number(process.env.MAX_CONCURRENT_REQUESTS || 1000);
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 1200);
-const TRUST_PROXY = process.env.TRUST_PROXY || "loopback";
+const TRUST_PROXY = parseTrustProxy(process.env.TRUST_PROXY);
 const PROXY_AUTH_TOKEN = process.env.PROXY_AUTH_TOKEN || "";
 const ALLOW_UNAUTHENTICATED = process.env.ALLOW_UNAUTHENTICATED === "true";
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
@@ -56,6 +56,15 @@ const hopByHopResponseHeaders = new Set([
 
 let activeRequests = 0;
 const rateLimitBuckets = new Map();
+
+function parseTrustProxy(value) {
+  if (!value) return "loopback";
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  if (/^\d+$/.test(normalized)) return Number(normalized);
+  return value;
+}
 
 if (NODE_ENV === "production" && !ALLOW_UNAUTHENTICATED && PROXY_AUTH_TOKEN.length < 32) {
   console.error(JSON.stringify({ level: "fatal", msg: "PROXY_AUTH_TOKEN must be set and at least 32 characters in production" }));
