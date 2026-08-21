@@ -38,6 +38,7 @@ REQUEST_TIMEOUT_MS=180000
 ## Variables opcionales
 
 ```env
+ALLOW_UNAUTHENTICATED=false
 MAX_BODY_SIZE=30mb
 RATE_LIMIT_WINDOW_MS=60000
 TRUST_PROXY=loopback
@@ -46,6 +47,15 @@ KEEP_ALIVE_TIMEOUT_MS=65000
 HEADERS_TIMEOUT_MS=66000
 SERVER_REQUEST_TIMEOUT_MS=190000
 ```
+
+`ALLOW_UNAUTHENTICATED=true` desactiva temporalmente la autenticacion obligatoria del proxy para compatibilidad con clientes legacy que no envian `x-proxy-token`.
+
+Aunque se use esta opcion, siguen activos:
+
+- allowlist de destinos
+- rate limiting
+- limite de concurrencia
+- timeouts
 
 ## Variables en neurolinks-backoffice
 
@@ -79,7 +89,7 @@ Respuesta esperada:
 
 ## Seguridad
 
-- En `NODE_ENV=production`, `PROXY_AUTH_TOKEN` es obligatorio.
+- En `NODE_ENV=production`, `PROXY_AUTH_TOKEN` es obligatorio salvo que `ALLOW_UNAUTHENTICATED=true` este habilitado temporalmente por compatibilidad.
 - El token debe tener al menos 32 caracteres.
 - El token se envia con el header `x-proxy-token`.
 - El proxy solo permite destinos externos predefinidos.
