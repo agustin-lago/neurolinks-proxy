@@ -13,7 +13,10 @@ const MAX_CONCURRENT_REQUESTS = Number(process.env.MAX_CONCURRENT_REQUESTS || 10
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 1200);
 const TRUST_PROXY = parseTrustProxy(process.env.TRUST_PROXY);
-const PROXY_AUTH_TOKEN = process.env.PROXY_AUTH_TOKEN || "";
+const PROXY_AUTH_TOKEN =
+  process.env.NEUROLINKS_PROXY_AUTH_TOKEN ||
+  process.env.PROXY_AUTH_TOKEN ||
+  "";
 const ALLOW_UNAUTHENTICATED = process.env.ALLOW_UNAUTHENTICATED === "true";
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 
@@ -69,7 +72,7 @@ function parseTrustProxy(value) {
 }
 
 if (NODE_ENV === "production" && !ALLOW_UNAUTHENTICATED && PROXY_AUTH_TOKEN.length < 32) {
-  console.error(JSON.stringify({ level: "fatal", msg: "PROXY_AUTH_TOKEN must be set and at least 32 characters in production" }));
+  console.error(JSON.stringify({ level: "fatal", msg: "NEUROLINKS_PROXY_AUTH_TOKEN must be set and at least 32 characters in production" }));
   process.exit(1);
 }
 
