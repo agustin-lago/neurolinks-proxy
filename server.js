@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import express from "express";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 const app = express();
 
@@ -235,68 +236,237 @@ app.all("*", async (req, res) => {
   res.setHeader("x-request-id", id);
 
   const resolved = resolveTarget(req);
+
   if (resolved.error) {
-    log("warn", "blocked request", { requestId: id, ip: req.ip, host: req.hostname, path: req.originalUrl, reason: resolved.error });
-    return res.status(resolved.errorStatus).json({ error: resolved.error });
+    log("warn", "blocked request", {
+      requestId: id,
+      ip: req.ip,
+      host: req.hostname,
+      path: req.originalUrl,
+      reason: resolved.error
+    });
+
+    return res
+      .status(resolved.errorStatus)
+      .json({
+        error: resolved.error
+      });
   }
 
-  const targetUrl = `https://${resolved.targetHost}${req.originalUrl}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const targetUrl =
+    `https://${resolved.targetHost}${req.originalUrl}`;
+
+  const controller =
+    new AbortController();
+
+  let timeoutTriggered = false;
+  let clientDisconnected = false;
+
   const startedAt = Date.now();
 
-  req.on("close", () => {
-    if (!res.writableEnded) controller.abort();
-  });
+  const timeout = setTimeout(() => {
+    timeoutTriggered = true;
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+
+
+  // IMPORTANTE:
+  //
+  // NO usar req.on("close") aca.
+  //
+  // El evento close del IncomingMessage puede ocurrir
+  // despues de haber recibido correctamente el request.
+  //
+  // Solamente abortamos el upstream cuando la conexion
+  // de respuesta hacia el cliente se cierra antes de terminar.
+  const handleClientDisconnect = () => {
+    if (!res.writableEnded) {
+      clientDisconnected = true;
+      controller.abort();
+    }
+  };
+
+  res.once(
+    "close",
+    handleClientDisconnect
+  );
+
 
   try {
-    const upstream = await fetch(targetUrl, {
-      method: req.method,
-      headers: stripRequestHeaders(req.headers),
-      body: ["GET", "HEAD"].includes(req.method) ? undefined : req.body,
-      redirect: "manual",
-      signal: controller.signal
-    });
+    const upstream =
+      await fetch(
+        targetUrl,
+        {
+          method: req.method,
+
+          headers:
+            stripRequestHeaders(
+              req.headers
+            ),
+
+          body:
+            ["GET", "HEAD"].includes(
+              req.method
+            )
+              ? undefined
+              : req.body,
+
+          redirect: "manual",
+
+          signal:
+            controller.signal
+        }
+      );
+
+
+    // El cliente pudo desconectarse mientras esperabamos
+    // la respuesta del upstream.
+    if (clientDisconnected) {
+      return;
+    }
+
 
     res.status(upstream.status);
-    copyResponseHeaders(upstream, res);
 
-    log("info", "proxied request", {
-      requestId: id,
-      provider: resolved.provider,
-      targetHost: resolved.targetHost,
-      method: req.method,
-      path: req.originalUrl,
-      status: upstream.status,
-      durationMs: Date.now() - startedAt
-    });
+    copyResponseHeaders(
+      upstream,
+      res
+    );
 
-    if (req.method === "HEAD" || !upstream.body) {
+
+    log(
+      "info",
+      "proxied request",
+      {
+        requestId: id,
+        provider:
+          resolved.provider,
+        targetHost:
+          resolved.targetHost,
+        method:
+          req.method,
+        path:
+          req.originalUrl,
+        status:
+          upstream.status,
+        durationMs:
+          Date.now() - startedAt
+      }
+    );
+
+
+    if (
+      req.method === "HEAD" ||
+      !upstream.body
+    ) {
       return res.end();
     }
 
-    Readable.fromWeb(upstream.body).on("error", (error) => {
-      log("error", "response stream error", { requestId: id, message: error?.message || String(error) });
-      if (!res.headersSent) res.status(502);
-      res.end();
-    }).pipe(res);
+
+    // Esperar realmente a que termine el stream.
+    //
+    // El codigo anterior hacia .pipe(res) sin await,
+    // por lo que el handler podia entrar al finally
+    // antes de que terminara la respuesta.
+    const responseStream =
+      Readable.fromWeb(
+        upstream.body
+      );
+
+    await pipeline(
+      responseStream,
+      res
+    );
+
+    return;
+
   } catch (error) {
-    const aborted = error?.name === "AbortError";
-    log("error", "upstream error", {
-      requestId: id,
-      provider: resolved.provider,
-      targetHost: resolved.targetHost,
-      path: req.originalUrl,
-      durationMs: Date.now() - startedAt,
-      message: aborted ? "Request timeout" : (error?.message || String(error))
-    });
+    const aborted =
+      error?.name === "AbortError";
+
+    const isTimeout =
+      aborted &&
+      timeoutTriggered;
+
+    const isClientDisconnect =
+      clientDisconnected;
+
+
+    let errorMessage;
+
+    if (isTimeout) {
+      errorMessage =
+        "Request timeout";
+    } else if (
+      isClientDisconnect
+    ) {
+      errorMessage =
+        "Client disconnected";
+    } else {
+      errorMessage =
+        error?.message ||
+        String(error);
+    }
+
+
+    log(
+      "error",
+      "upstream error",
+      {
+        requestId: id,
+        provider:
+          resolved.provider,
+        targetHost:
+          resolved.targetHost,
+        path:
+          req.originalUrl,
+        durationMs:
+          Date.now() - startedAt,
+        message:
+          errorMessage
+      }
+    );
+
+
+    // Si el cliente ya se desconecto,
+    // no intentar escribirle una respuesta.
+    if (isClientDisconnect) {
+      return;
+    }
+
 
     if (!res.headersSent) {
-      return res.status(aborted ? 504 : 502).json({ error: aborted ? "Proxy request timeout" : "Proxy upstream error", requestId: id });
+      if (isTimeout) {
+        return res
+          .status(504)
+          .json({
+            error:
+              "Proxy request timeout",
+            requestId: id
+          });
+      }
+
+      return res
+        .status(502)
+        .json({
+          error:
+            "Proxy upstream error",
+          requestId: id
+        });
     }
-    res.end();
+
+
+    if (!res.writableEnded) {
+      res.end();
+    }
+
   } finally {
     clearTimeout(timeout);
+
+    res.off(
+      "close",
+      handleClientDisconnect
+    );
   }
 });
 
