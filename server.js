@@ -21,7 +21,8 @@ const googleAllowedHosts = new Set([
   "oauth2.googleapis.com",
   "sheets.googleapis.com",
   "calendar.googleapis.com",
-  "drive.googleapis.com"
+  "drive.googleapis.com",
+  "docs.googleapis.com"
 ]);
 
 const openAiAllowedPathPrefixes = [
